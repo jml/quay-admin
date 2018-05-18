@@ -70,6 +70,10 @@ class Repository(object):
     def spec(self):
         return '%s/%s' % (self.namespace, self.name)
 
+    @classmethod
+    def from_dict(cls, data):
+        return cls(**data)
+
 
 @inlineCallbacks
 def get_repository_permissions(repository, registry):
@@ -132,6 +136,36 @@ class RepositoryPermissions(object):
     user_permissions = attr.ib()
     team_permissions = attr.ib()
 
+    @classmethod
+    def from_dict(cls, data):
+        return cls(
+            repository=Repository.from_dict(data['repository']),
+            user_permissions=map(UserPermission.from_dict, data['user_permissions']),
+            team_permissions=map(TeamPermission.from_dict, data['team_permissions']),
+        )
+
+@attr.s
+class AllRepositoryPermissions(object):
+
+    _repository_permissions = attr.ib()
+
+    @classmethod
+    @inlineCallbacks
+    def from_registry(cls, registry, namespace):
+        repos = yield registry.list_repositories(namespace)
+        perms = yield map_concurrently(get_repository_permissions, repos, registry)
+        returnValue(cls(perms))
+
+    @classmethod
+    def from_json_file(cls, state_file_path):
+        with open(state_file_path, 'r') as state_file:
+            raw_perms = json.load(state_file)
+        return cls([RepositoryPermissions.from_dict(perm) for perm in raw_perms])
+
+    def to_json_file(self, state_file_path):
+        with open(state_file_path, 'w') as state_file:
+            json.dump([attr.asdict(perm) for perm in self._repository_permissions], state_file)
+
 
 def map_concurrently(f, xs, *args, **kwargs):
     """Run 'f' concurrently over each 'x' in 'xs'.
@@ -165,18 +199,14 @@ def main(reactor, *args):
     parser = make_argument_parser()
     config = parser.parse_args(args)
     if config.from_state:
-        with open(config.from_state, 'r') as state_file:
-            raw_perms = json.load(state_file)
-            perms = [RepositoryPermissions(**perm) for perm in raw_perms]
+        perms = AllRepositoryPermissions.from_json_file(config.from_state)
     else:
         quay_token = os.environ.get(QUAY_TOKEN_ENV_NAME, None)
         registry = Registry(endpoint=config.api_root, token=quay_token)
-        repos = yield registry.list_repositories(config.namespace)
-        perms = yield map_concurrently(get_repository_permissions, repos, registry)
+        perms = yield AllRepositoryPermissions.from_registry(registry, config.namespace)
 
     if config.dump_state:
-        with open(config.dump_state, 'w') as state_file:
-            json.dump([attr.asdict(perm) for perm in perms], state_file)
+        perms.to_json_file(config.dump_state)
 
     returnValue(None)
 
