@@ -17,7 +17,7 @@ QUAY_TOKEN_ENV_NAME = 'QUAY_TOKEN'
 STATE_FILE = 'quay.state'
 
 
-@attr.s
+@attr.s(frozen=True)
 class Registry(object):
     """A quay.io registry."""
     endpoint = attr.ib(default=QUAY_IO_ENDPOINT)
@@ -55,7 +55,7 @@ class Registry(object):
         returnValue(map(TeamPermission.from_dict, perms['permissions'].values()))
 
 
-@attr.s
+@attr.s(frozen=True, cmp=True)
 class Repository(object):
     """A quay.io repository."""
 
@@ -94,7 +94,7 @@ def get_repository_permissions(repository, registry):
     )
 
 
-@attr.s
+@attr.s(frozen=True)
 class Avatar(object):
     color = attr.ib()
     hash = attr.ib()
@@ -102,7 +102,7 @@ class Avatar(object):
     name = attr.ib()
 
 
-@attr.s
+@attr.s(frozen=True)
 class Permission(object):
     """Base permission class."""
     avatar = attr.ib()
@@ -116,19 +116,19 @@ class Permission(object):
         return cls(avatar=avatar, **data)
 
 
-@attr.s
+@attr.s(frozen=True)
 class UserPermission(Permission):
     """A permission a user has."""
     is_org_member = attr.ib()
     is_robot = attr.ib()
 
 
-@attr.s
+@attr.s(frozen=True)
 class TeamPermission(Permission):
     """A permission a team has."""
 
 
-@attr.s
+@attr.s(frozen=True)
 class RepositoryPermissions(object):
     """The permissions for a repository."""
 
@@ -144,7 +144,8 @@ class RepositoryPermissions(object):
             team_permissions=map(TeamPermission.from_dict, data['team_permissions']),
         )
 
-@attr.s
+
+@attr.s(frozen=True)
 class AllRepositoryPermissions(object):
 
     _repository_permissions = attr.ib()
@@ -165,6 +166,15 @@ class AllRepositoryPermissions(object):
     def to_json_file(self, state_file_path):
         with open(state_file_path, 'w') as state_file:
             json.dump([attr.asdict(perm) for perm in self._repository_permissions], state_file)
+
+    def find_repos_with_external_users(self):
+        repos = {}
+        for perm in self._repository_permissions:
+            external_users = [user for user in perm.user_permissions
+                              if not user.is_org_member]
+            if external_users:
+                repos[perm.repository] = external_users
+        return repos
 
 
 def map_concurrently(f, xs, *args, **kwargs):
@@ -205,9 +215,22 @@ def main(reactor, *args):
         registry = Registry(endpoint=config.api_root, token=quay_token)
         perms = yield AllRepositoryPermissions.from_registry(registry, config.namespace)
 
+    external = perms.find_repos_with_external_users()
+    for repo, users in external.items():
+        print repo.spec
+        for user in users:
+            print '- %s [%s]%s' % (
+                user.name,
+                user.role,
+                ' (robot)' if user.is_robot else '',
+            )
+        print
+
     if config.dump_state:
         perms.to_json_file(config.dump_state)
 
+    if external:
+        sys.exit(1)
     returnValue(None)
 
 
