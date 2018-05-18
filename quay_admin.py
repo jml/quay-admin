@@ -1,3 +1,4 @@
+import argparse
 import json
 import os
 import sys
@@ -143,15 +144,40 @@ def map_concurrently(f, xs, *args, **kwargs):
     return gatherResults(deferreds)
 
 
+def make_argument_parser():
+    parser = argparse.ArgumentParser(description='Show information about quay.io permissions')
+    parser.add_argument('namespace', type=str, help='Namespace to look in')
+    parser.add_argument(
+        '--from-state', type=str,
+        help='If provided, get quay.io state from a file, rather than an API')
+    parser.add_argument(
+        '--api-root', type=str,
+        default=QUAY_IO_ENDPOINT,
+        help='Root of quay.io API. Ignored if --from-state provided.')
+    parser.add_argument(
+        '--dump-state', type=str,
+        help='If provided, dump state to a file. Will overwrite file if it exists.')
+    return parser
+
+
 @inlineCallbacks
 def main(reactor, *args):
-    quay_token = os.environ.get(QUAY_TOKEN_ENV_NAME, None)
-    registry = Registry(endpoint=QUAY_IO_ENDPOINT, token=quay_token)
-    namespace = 'weaveworks'
-    repos = yield registry.list_repositories(namespace)
-    perms = yield map_concurrently(get_repository_permissions, repos, registry)
-    with open(STATE_FILE, 'w') as state_file:
-        json.dump([attr.asdict(perm) for perm in perms], state_file)
+    parser = make_argument_parser()
+    config = parser.parse_args(args)
+    if config.from_state:
+        with open(config.from_state, 'r') as state_file:
+            raw_perms = json.load(state_file)
+            perms = [RepositoryPermissions(**perm) for perm in raw_perms]
+    else:
+        quay_token = os.environ.get(QUAY_TOKEN_ENV_NAME, None)
+        registry = Registry(endpoint=config.api_root, token=quay_token)
+        repos = yield registry.list_repositories(config.namespace)
+        perms = yield map_concurrently(get_repository_permissions, repos, registry)
+
+    if config.dump_state:
+        with open(config.dump_state, 'w') as state_file:
+            json.dump([attr.asdict(perm) for perm in perms], state_file)
+
     returnValue(None)
 
 
