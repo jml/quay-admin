@@ -8,6 +8,7 @@ author = "Jonathan M. Lange"
 author-email = "jml@mumak.net"
 home-page = "https://github.com/jml/quay-admin"
 classifiers = ["License :: OSI Approved :: Apache Software License"]
+description-file="README.rst"
 
 [tool.flit.scripts]
 quay-admin = "quayadmin._impl:script"
