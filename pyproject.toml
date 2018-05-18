@@ -1,0 +1,13 @@
+[build-system]
+requires = ["flit"]
+build-backend = "flit.buildapi"
+
+[tool.flit.metadata]
+module = "quayadmin"
+author = "Jonathan M. Lange"
+author-email = "jml@mumak.net"
+home-page = "https://github.com/jml/quay-admin"
+classifiers = ["License :: OSI Approved :: Apache Software License"]
+
+[tool.flit.scripts]
+quay-admin = "quayadmin._impl:script"

@@ -3,18 +3,18 @@ import json
 import os
 import sys
 
+# We need to make sure we know where our SSL certificates are.
+# See https://stackoverflow.com/questions/34358935/python-treq-fails-with-twisted-openssl-error-due-to-empty-trust-store-on-windows
 import certifi
 os.environ["SSL_CERT_FILE"] = certifi.where()
 
 import attr
 import treq
 from twisted.internet.defer import gatherResults, inlineCallbacks
-from twisted.internet.task import react
 
 
 QUAY_IO_ENDPOINT = 'https://quay.io/api/v1'
 QUAY_TOKEN_ENV_NAME = 'QUAY_TOKEN'
-STATE_FILE = 'quay.state'
 
 
 @attr.s(frozen=True)
@@ -230,5 +230,7 @@ def main(reactor, *args):
         sys.exit(1)
 
 
-if __name__ == '__main__':
+def script():
+    """Command-line script for quay-admin."""
+    from twisted.internet.task import react
     react(main, sys.argv[1:])
