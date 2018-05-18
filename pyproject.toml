@@ -9,6 +9,11 @@ author-email = "jml@mumak.net"
 home-page = "https://github.com/jml/quay-admin"
 classifiers = ["License :: OSI Approved :: Apache Software License"]
 description-file="README.rst"
+requires = [
+  "attrs",
+  "treq",
+  "twisted[tls]",
+]
 
 [tool.flit.scripts]
 quay-admin = "quayadmin._impl:script"
