@@ -8,7 +8,7 @@ os.environ["SSL_CERT_FILE"] = certifi.where()
 
 import attr
 import treq
-from twisted.internet.defer import gatherResults, inlineCallbacks, returnValue
+from twisted.internet.defer import gatherResults, inlineCallbacks
 from twisted.internet.task import react
 
 
@@ -38,21 +38,20 @@ class Registry(object):
         """
         repos = yield self._request(
             'GET', 'repository', params={'namespace': namespace})
-        returnValue([Repository(**repo) for repo in repos['repositories']])
+        return [Repository(**repo) for repo in repos['repositories']]
 
     @inlineCallbacks
     def get_user_permissions(self, repo_spec):
         """Get the user permissions for a repository."""
         path = 'repository/%s/permissions/user/' % (repo_spec,)
         perms = yield self._request('GET', path)
-        returnValue(
-            map(UserPermission.from_dict, perms['permissions'].values()))
+        return map(UserPermission.from_dict, perms['permissions'].values())
 
     @inlineCallbacks
     def get_team_permissions(self, repo_spec):
         path = 'repository/%s/permissions/team/' % (repo_spec,)
         perms = yield self._request('GET', path)
-        returnValue(map(TeamPermission.from_dict, perms['permissions'].values()))
+        return map(TeamPermission.from_dict, perms['permissions'].values())
 
 
 @attr.s(frozen=True, cmp=True)
@@ -85,12 +84,10 @@ def get_repository_permissions(repository, registry):
         registry.get_user_permissions(repository.spec),
         registry.get_team_permissions(repository.spec),
     ])
-    returnValue(
-        RepositoryPermissions(
-            repository=repository,
-            user_permissions=user_perms,
-            team_permissions=team_perms,
-        )
+    return RepositoryPermissions(
+        repository=repository,
+        user_permissions=user_perms,
+        team_permissions=team_perms,
     )
 
 
@@ -155,7 +152,7 @@ class AllRepositoryPermissions(object):
     def from_registry(cls, registry, namespace):
         repos = yield registry.list_repositories(namespace)
         perms = yield map_concurrently(get_repository_permissions, repos, registry)
-        returnValue(cls(perms))
+        return cls(perms)
 
     @classmethod
     def from_json_file(cls, state_file_path):
@@ -217,21 +214,20 @@ def main(reactor, *args):
 
     external = perms.find_repos_with_external_users()
     for repo, users in external.items():
-        print repo.spec
+        print(repo.spec)
         for user in users:
-            print '- %s [%s]%s' % (
+            print('- %s [%s]%s' % (
                 user.name,
                 user.role,
                 ' (robot)' if user.is_robot else '',
-            )
-        print
+            ))
+        print()
 
     if config.dump_state:
         perms.to_json_file(config.dump_state)
 
     if external:
         sys.exit(1)
-    returnValue(None)
 
 
 if __name__ == '__main__':
